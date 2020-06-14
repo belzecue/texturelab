@@ -14,7 +14,7 @@ function _getMousePos(canvas, evt) {
 	return new Vector2(evt.clientX - rect.left, evt.clientY - rect.top);
 }
 
-class Vector2 {
+export class Vector2 {
 	x: number;
 	y: number;
 
@@ -22,15 +22,25 @@ class Vector2 {
 		this.x = x;
 		this.y = y;
 	}
+
+	clone(): Vector2 {
+		return new Vector2(this.x, this.y);
+	}
+
+	static add(a: Vector2, b: Vector2): Vector2 {
+		return new Vector2(a.x + b.x, a.y + b.y);
+	}
+
+	static subtract(a: Vector2, b: Vector2): Vector2 {
+		return new Vector2(a.x - b.x, a.y - b.y);
+	}
 }
 
-class Rect {
-	protected visible: boolean = true;
-
-	protected x: number = 0;
-	protected y: number = 0;
-	protected width: number;
-	protected height: number;
+export class Rect {
+	public x: number = 0;
+	public y: number = 0;
+	public width: number;
+	public height: number;
 
 	color: string;
 
@@ -75,6 +85,63 @@ class Rect {
 		this.x += dx;
 		this.y += dy;
 	}
+
+	public get left() {
+		return this.x;
+	}
+
+	public get top() {
+		return this.y;
+	}
+
+	public get right() {
+		return this.x + this.width;
+	}
+
+	public get bottom() {
+		return this.y + this.height;
+	}
+
+	public get center() {
+		return new Vector2(this.centerX(), this.centerY());
+	}
+
+	public intersects(other: Rect) {
+		if (this.left > other.right) return false;
+		if (this.right < other.left) return false;
+		if (this.bottom < other.top) return false;
+		if (this.top > other.bottom) return false;
+
+		return true;
+	}
+
+	public expand(uniformSize: number) {
+		let halfSize = uniformSize * 0.5;
+
+		// assume it's a rect with a positive area
+		this.x -= halfSize;
+		this.y -= halfSize;
+		this.width += halfSize * 2;
+		this.height += halfSize * 2;
+	}
+
+	public expandByRect(rect: Rect) {
+		// assume it's a rect with a positive area
+		this.x = Math.min(this.x, rect.x);
+		this.y = Math.min(this.y, rect.y);
+		this.width = Math.max(this.width, rect.width);
+		this.height = Math.max(this.height, rect.height);
+	}
+
+	clone(): Rect {
+		let rect = new Rect();
+		rect.x = this.x;
+		rect.y = this.y;
+		rect.width = this.width;
+		rect.height = this.height;
+
+		return rect;
+	}
 }
 
 /*
@@ -88,6 +155,8 @@ export class SceneView {
 	context: CanvasRenderingContext2D;
 
 	// screen/canvas space
+	globalMousePos: Vector2;
+
 	mousePos: Vector2;
 	prevMousePos: Vector2;
 	mouseDownPos: Vector2; // pos of last mouse down
@@ -124,15 +193,30 @@ export class SceneView {
 		});
 
 		// todo: do document mouse move event callback too
+		document.addEventListener("mousemove", function(evt: MouseEvent) {
+			self.onGlobalMouseMove(evt);
+		});
 
 		this.zoomFactor = 1;
 		this.offset = new Vector2(0, 0);
 
 		this.mousePos = new Vector2(0, 0);
+		this.globalMousePos = new Vector2(0, 0);
 	}
 
 	getAbsPos() {
 		return new Vector2(this.canvas.offsetLeft, this.canvas.offsetTop);
+	}
+
+	isMouseOverCanvas() {
+		var rect = this.canvas.getBoundingClientRect();
+		//console.log(rect);
+		if (this.globalMousePos.x < rect.left) return false;
+		if (this.globalMousePos.y < rect.top) return false;
+		if (this.globalMousePos.x > rect.right) return false;
+		if (this.globalMousePos.y > rect.bottom) return false;
+
+		return true;
 	}
 
 	onMouseDown(evt: MouseEvent) {
@@ -167,6 +251,10 @@ export class SceneView {
 		}
 	}
 
+	onGlobalMouseMove(evt: MouseEvent) {
+		this.globalMousePos = new Vector2(evt.pageX, evt.pageY);
+	}
+
 	onMouseScroll(evt: WheelEvent) {
 		// no panning while zooming
 		if (this.panning) return;
@@ -190,6 +278,13 @@ export class SceneView {
 	onMouseOut(evt: MouseEvent) {
 		// cancel panning
 		this.panning = false;
+	}
+
+	get sceneCenter(): Vector2 {
+		return this.canvasToSceneXY(
+			this.canvas.width / 2,
+			this.canvas.height / 2
+		);
 	}
 
 	zoom(x: number, y: number, level: number) {}
@@ -264,6 +359,11 @@ export class SceneView {
 			(x - this.offset.x) * (1.0 / this.zoomFactor),
 			(y - this.offset.y) * (1.0 / this.zoomFactor)
 		);
+	}
+
+	globalToCanvasXY(x: number, y: number): Vector2 {
+		let rect = this.canvas.getBoundingClientRect();
+		return new Vector2(x - rect.left, y - rect.top);
 	}
 
 	getMouseSceneSpace(): Vector2 {
