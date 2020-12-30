@@ -1,7 +1,7 @@
-import { DesignerNode } from "../../designer/designernode";
+import { GpuDesignerNode } from "../../designer/gpudesignernode";
 
 // https://thebookofshaders.com/07/
-export class PolygonNode extends DesignerNode {
+export class PolygonNode extends GpuDesignerNode {
 	public init() {
 		this.title = "Polygon";
 
@@ -10,7 +10,7 @@ export class PolygonNode extends DesignerNode {
 		this.addIntProperty("sides", "Sides", 5, 0, 20, 1);
 		this.addFloatProperty("gradient", "Gradient", 0, 0, 1.0, 0.01);
 
-		var source = `
+		const source = `
         #define PI 3.14159265359
         #define TWO_PI 6.28318530718
 
@@ -42,7 +42,7 @@ export class PolygonNode extends DesignerNode {
 	}
 }
 
-export class CircleNode extends DesignerNode {
+export class CircleNode extends GpuDesignerNode {
 	public init() {
 		this.title = "Circle";
 
@@ -53,7 +53,7 @@ export class CircleNode extends DesignerNode {
 			"Exponent"
 		]);
 
-		var source = `
+		const source = `
         vec4 process(vec2 uv)
         {
             float dist = distance(uv, vec2(0.5));

@@ -1,14 +1,14 @@
-import { DesignerNode } from "../../designer/designernode";
+import { GpuDesignerNode } from "../../designer/gpudesignernode";
 
-export class SplatNode extends DesignerNode {
-  public init() {
-    this.title = "Splat";
+export class SplatNode extends GpuDesignerNode {
+	public init() {
+		this.title = "Splat";
 
-    this.addInput("image");
+		this.addInput("image");
 
-    this.addIntProperty("count", "Count", 50, 0, 1000, 1);
+		this.addIntProperty("count", "Count", 50, 0, 1000, 1);
 
-    var source = `
+		const source = `
         // https://github.com/glslify/glsl-inverse/blob/master/index.glsl
         // mat3 inverse(mat3 m) {
         //     float a00 = m[0][0], a01 = m[0][1], a02 = m[0][2];
@@ -106,6 +106,6 @@ export class SplatNode extends DesignerNode {
         }
         `;
 
-    this.buildShader(source);
-  }
+		this.buildShader(source);
+	}
 }

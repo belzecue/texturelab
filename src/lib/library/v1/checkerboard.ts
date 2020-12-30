@@ -1,17 +1,17 @@
-import { DesignerNode } from "../../designer/designernode";
+import { GpuDesignerNode } from "../../designer/gpudesignernode";
 import { Color } from "@/lib/designer/color";
 
 // https://stackoverflow.com/questions/4694608/glsl-checkerboard-pattern
-export class CheckerBoardNode extends DesignerNode {
-  public init() {
-    this.title = "CheckerBoard";
+export class CheckerBoardNode extends GpuDesignerNode {
+	public init() {
+		this.title = "CheckerBoard";
 
-    this.addFloatProperty("rows", "Rows", 2, 1, 20, 1);
-    this.addFloatProperty("columns", "Columns", 2, 1, 20, 1);
+		this.addFloatProperty("rows", "Rows", 2, 1, 20, 1);
+		this.addFloatProperty("columns", "Columns", 2, 1, 20, 1);
 
-    this.addColorProperty("color", "Color", new Color());
+		this.addColorProperty("color", "Color", new Color());
 
-    var source = `
+		const source = `
         vec4 process(vec2 uv)
         {
             if ((mod(prop_columns*uv.x, 1.0) < 0.5) ^^ (mod(prop_rows*uv.y, 1.0) < 0.5))
@@ -25,6 +25,6 @@ export class CheckerBoardNode extends DesignerNode {
         }
         `;
 
-    this.buildShader(source);
-  }
+		this.buildShader(source);
+	}
 }

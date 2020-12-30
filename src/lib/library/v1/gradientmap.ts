@@ -1,8 +1,8 @@
-import { DesignerNode } from "../../designer/designernode";
+import { GpuDesignerNode } from "../../designer/gpudesignernode";
 import { Color } from "@/lib/designer/color";
 import { Gradient } from "@/lib/designer/gradient";
 
-export class GradientMapNode extends DesignerNode {
+export class GradientMapNode extends GpuDesignerNode {
 	public init() {
 		this.title = "GradientMap";
 
@@ -10,7 +10,7 @@ export class GradientMapNode extends DesignerNode {
 
 		this.addGradientProperty("gradient", "Gradient", Gradient.default());
 
-		var source = `
+		const source = `
         float grayscale(vec3 col)
         {
             return (col.r + col.g + col.b) / 3.0;

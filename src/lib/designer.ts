@@ -10,18 +10,39 @@ import {
 	BoolProperty,
 	EnumProperty,
 	ColorProperty,
-	Property,
+	Property
 } from "./designer/properties";
 import { Color } from "./designer/color";
 import {
 	DesignerVariable,
 	DesignerVariableType,
-	DesignerNodePropertyMap,
+	DesignerNodePropertyMap
 } from "./designer/designervariable";
+
+export class NodeRenderContext {
+	canvas: HTMLCanvasElement;
+	gl: WebGLRenderingContext;
+	fbo: WebGLFramebuffer;
+	inputs: NodeInput[];
+
+	textureWidth: number;
+	textureHeight: number;
+
+	randomSeed: number;
+}
+
+// keeps track of query object that tracks
+// node's processing time
+// https://www.khronos.org/registry/webgl/extensions/EXT_disjoint_timer_query_webgl2/
+export class NodeRenderTimer {
+	query: WebGLQuery;
+	ms: number;
+	node: DesignerNode;
+}
 
 export class Designer {
 	canvas: HTMLCanvasElement;
-	gl: WebGLRenderingContext;
+	gl: WebGL2RenderingContext;
 	public texCoordBuffer: WebGLBuffer;
 	public posBuffer: WebGLBuffer;
 	vertexShaderSource: string;
@@ -43,13 +64,20 @@ export class Designer {
 	//variables
 	variables: DesignerVariable[];
 
+	renderContext: NodeRenderContext;
+
+	renderTimers: NodeRenderTimer[];
+	queryExt: any;
+
 	// callbacks
 	onthumbnailgenerated: (DesignerNode, HTMLImageElement) => void;
 
 	// called everytime a node's texture gets updated
 	// listeners can use this update their CanvasTextures
 	// by rendering the node's texture with renderNodeTextureToCanvas(node, imageCanvas)
-	onnodetextureupdated: (DesignerNode) => void;
+	onnodetextureupdated: (DesignerNode, number) => void;
+
+	onnodetimeupdated: (DesignerNode, number) => void;
 
 	public constructor() {
 		this.width = 1024;
@@ -62,12 +90,60 @@ export class Designer {
 		this.canvas.height = this.height;
 		this.gl = this.canvas.getContext("webgl2");
 
-		this.nodes = new Array();
-		this.conns = new Array();
+		let result = this.gl.getExtension("EXT_disjoint_timer_query_webgl2");
+		if (result) console.log("TIMER QUERY SUPPORTED", result);
+		else console.log("TIMER QUERY NOT SUPPORTED", result);
+		this.queryExt = result;
 
-		this.updateList = new Array();
-		this.variables = new Array();
+		// floating point textures
+		result = this.gl.getExtension("EXT_color_buffer_float");
+		if (!result) console.log("COLOR BUFFER FLOAT NOT SUPPORTED", result);
+
+		result = this.gl.getExtension("OES_texture_float_linear");
+		if (!result) console.log("TEXTURE FLOAT LINEAR NOT SUPPORTED", result);
+
+		this.renderContext = new NodeRenderContext();
+
+		this.nodes = [];
+		this.conns = [];
+
+		this.updateList = [];
+		this.variables = [];
+
+		this.renderTimers = [];
+
 		this.init();
+	}
+
+	// evaludate rendertimers
+	// discards ones that arent ready
+	// this function should be called at the beginning
+	// of a render cycle
+	public calculateNodeProcessingTimes(): NodeRenderTimer[] {
+		const gl = this.gl;
+
+		let completeTimers: NodeRenderTimer[] = [];
+		for (let timer of this.renderTimers) {
+			var available = gl.getQueryParameter(
+				timer.query,
+				gl.QUERY_RESULT_AVAILABLE
+			);
+			var disjoint = gl.getParameter(this.queryExt.GPU_DISJOINT_EXT as GLenum);
+
+			if (available && !disjoint) {
+				// See how much time the rendering of the object took in nanoseconds.
+				var timeElapsed = gl.getQueryParameter(timer.query, gl.QUERY_RESULT);
+				timer.ms = timeElapsed / (1000 * 1000);
+				completeTimers.push(timer);
+			}
+		}
+
+		// decided not to empty this each frame since some operations might
+		// take long, however, something should be done so that dangling
+		// timers dont stay in the list
+		//this.renderTimers = [];
+
+		return completeTimers;
 	}
 
 	public setTextureSize(width: number, height: number) {
@@ -77,7 +153,7 @@ export class Designer {
 		this.canvas.width = this.width;
 		this.canvas.height = this.height;
 
-		for (let node of this.nodes) {
+		for (const node of this.nodes) {
 			node.createTexture();
 			this.requestUpdate(node);
 		}
@@ -104,11 +180,13 @@ export class Designer {
 	}
 
 	update() {
-		var updateQuota = 10000000000000;
+		this.updateRenderTimers();
+
+		let updateQuota = 10000000000000;
 		// fetch random node from update list (having all in sockets that have been updated) and update it
 		// todo: do only on per update loop
 		while (this.updateList.length != 0) {
-			for (let node of this.updateList) {
+			for (const node of this.updateList) {
 				if (this.haveAllUpdatedLeftNodes(node)) {
 					// update this node's texture and thumbnail
 
@@ -130,9 +208,18 @@ export class Designer {
 		}
 	}
 
+	updateRenderTimers() {
+		if (!this.onnodetimeupdated) return;
+
+		let timers = this.calculateNodeProcessingTimes();
+		for (let timer of timers) {
+			this.onnodetimeupdated(timer.node, timer.ms);
+		}
+	}
+
 	// checks if all input nodes have needsUpdate set to false
 	haveAllUpdatedLeftNodes(node: DesignerNode): boolean {
-		for (let con of this.conns) {
+		for (const con of this.conns) {
 			// get connections to this node
 			if (con.rightNode == node) {
 				if (con.leftNode.needsUpdate == true) {
@@ -155,7 +242,7 @@ export class Designer {
 		}
 
 		// add all right connections
-		for (let con of this.conns) {
+		for (const con of this.conns) {
 			if (con.leftNode == node) {
 				this.requestUpdate(con.rightNode);
 			}
@@ -163,7 +250,7 @@ export class Designer {
 	}
 
 	public invalidateAllNodes() {
-		for (let node of this.nodes) {
+		for (const node of this.nodes) {
 			this.requestUpdate(node);
 		}
 	}
@@ -174,14 +261,14 @@ export class Designer {
 
 	// creates node and adds it to scene
 	createNode(name: string): DesignerNode {
-		var node = this.library.create(name);
+		const node = this.library.create(name);
 
 		this.addNode(node);
 		return node;
 	}
 
 	createFBO() {
-		var gl = this.gl;
+		const gl = this.gl;
 
 		this.fbo = gl.createFramebuffer();
 
@@ -189,7 +276,7 @@ export class Designer {
 	}
 
 	createVertexBuffers() {
-		var gl = this.gl;
+		const gl = this.gl;
 		//var texCoordLocation = gl.getAttribLocation(program, "a_texCoord");
 
 		// provide texture coordinates for the rectangle.
@@ -209,7 +296,7 @@ export class Designer {
 				1.0,
 				0.0,
 				1.0,
-				1.0,
+				1.0
 			]),
 			gl.STATIC_DRAW
 		);
@@ -238,7 +325,7 @@ export class Designer {
 				0.0,
 				1.0,
 				1.0,
-				0.0,
+				0.0
 			]),
 			gl.STATIC_DRAW
 		);
@@ -250,7 +337,7 @@ export class Designer {
 	// adds it to this.updateList
 	// if `init` is set to false, node will not be initialized
 	// useful for undo-redo where node is re-added
-	addNode(node: DesignerNode, init: boolean = true) {
+	addNode(node: DesignerNode, init = true) {
 		this.nodes.push(node);
 		if (init) {
 			node.gl = this.gl;
@@ -261,7 +348,7 @@ export class Designer {
 	}
 
 	getNodeById(nodeId: string): DesignerNode {
-		for (let node of this.nodes) {
+		for (const node of this.nodes) {
 			if (node.id == nodeId) return node;
 		}
 		return null;
@@ -272,7 +359,7 @@ export class Designer {
 		rightNode: DesignerNode,
 		rightIndex: string
 	) {
-		let con = new DesignerNodeConn();
+		const con = new DesignerNodeConn();
 		con.leftNode = leftNode;
 
 		con.rightNode = rightNode;
@@ -291,7 +378,7 @@ export class Designer {
 		rightNode: DesignerNode,
 		rightIndex: string
 	) {
-		for (let con of this.conns) {
+		for (const con of this.conns) {
 			if (
 				con.leftNode == leftNode &&
 				con.rightNode == rightNode &&
@@ -314,7 +401,7 @@ export class Designer {
 
 	// todo: double check connections just in case
 	removeNode(nodeId: string): DesignerNode {
-		let node = this.getNodeById(nodeId);
+		const node = this.getNodeById(nodeId);
 		if (!node) {
 			return null;
 		}
@@ -329,7 +416,7 @@ export class Designer {
 	}
 
 	generateImage(name: string): HTMLImageElement {
-		var node: DesignerNode = this.getNodeByName(name);
+		const node: DesignerNode = this.getNodeByName(name);
 		return this.generateImageFromNode(node);
 	}
 
@@ -341,8 +428,8 @@ export class Designer {
 	generateImageFromNode(node: DesignerNode): HTMLImageElement {
 		//console.log("generating node "+node.exportName);
 		// process input nodes
-		var inputs: NodeInput[] = this.getNodeInputs(node);
-		for (let input of inputs) {
+		const inputs: NodeInput[] = this.getNodeInputs(node);
+		for (const input of inputs) {
 			if (input.node.needsUpdate) {
 				this.generateImageFromNode(input.node);
 
@@ -352,29 +439,48 @@ export class Designer {
 			}
 		}
 
-		var gl = this.gl;
+		const gl = this.gl;
 
-		// todo: move to node maybe
-		gl.bindFramebuffer(gl.FRAMEBUFFER, this.fbo);
-		gl.activeTexture(gl.TEXTURE0);
-		gl.framebufferTexture2D(
-			gl.FRAMEBUFFER,
-			gl.COLOR_ATTACHMENT0,
-			gl.TEXTURE_2D,
-			node.tex,
-			0
-		);
+		let context = this.renderContext;
+		context.gl = gl;
+		context.canvas = this.canvas;
+		context.inputs = inputs;
+		context.randomSeed = this.randomSeed;
+		context.fbo = this.fbo;
+		context.textureWidth = this.width;
+		context.textureHeight = this.height;
 
-		gl.viewport(0, 0, this.width, this.height);
-		node.render(inputs);
+		let dtInMs = 0;
+		if (node.isCpu()) {
+			let startTime = Date.now();
 
-		gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+			node.render(context);
 
-		if (this.onnodetextureupdated) {
-			this.onnodetextureupdated(node);
+			let endTime = Date.now();
+			dtInMs = endTime - startTime;
+		} else {
+			let query = gl.createQuery();
+			gl.beginQuery(this.queryExt.TIME_ELAPSED_EXT, query);
+
+			node.render(context);
+			gl.endQuery(this.queryExt.TIME_ELAPSED_EXT);
+
+			// create timer
+			let timer = new NodeRenderTimer();
+			timer.node = node;
+			timer.query = query;
+			timer.ms = 0;
+
+			this.renderTimers.push(timer);
+
+			dtInMs = -1;
 		}
 
-		var thumb = this.generateThumbnailFromNode(node);
+		if (this.onnodetextureupdated) {
+			this.onnodetextureupdated(node, dtInMs);
+		}
+
+		const thumb = this.generateThumbnailFromNode(node);
 		if (this.onthumbnailgenerated) {
 			this.onthumbnailgenerated(node, thumb);
 		}
@@ -386,7 +492,7 @@ export class Designer {
 	// ensure the node is updated before calling this function
 	// this function doesnt try to update child nodes
 	generateThumbnailFromNode(node: DesignerNode) {
-		var gl = this.gl;
+		const gl = this.gl;
 
 		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
@@ -394,8 +500,8 @@ export class Designer {
 		gl.useProgram(this.thumbnailProgram);
 
 		// bind mesh
-		var posLoc = gl.getAttribLocation(this.thumbnailProgram, "a_pos");
-		var texCoordLoc = gl.getAttribLocation(
+		const posLoc = gl.getAttribLocation(this.thumbnailProgram, "a_pos");
+		const texCoordLoc = gl.getAttribLocation(
 			this.thumbnailProgram,
 			"a_texCoord"
 		);
@@ -434,7 +540,7 @@ export class Designer {
 	// used as an alternative to move textures since toDataUrl is
 	// so computationally expensive
 	copyNodeTextureToImageCanvas(node: DesignerNode, canvas: ImageCanvas) {
-		var gl = this.gl;
+		const gl = this.gl;
 
 		gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
@@ -442,8 +548,8 @@ export class Designer {
 		gl.useProgram(this.thumbnailProgram);
 
 		// bind mesh
-		var posLoc = gl.getAttribLocation(this.thumbnailProgram, "a_pos");
-		var texCoordLoc = gl.getAttribLocation(
+		const posLoc = gl.getAttribLocation(this.thumbnailProgram, "a_pos");
+		const texCoordLoc = gl.getAttribLocation(
 			this.thumbnailProgram,
 			"a_texCoord"
 		);
@@ -475,7 +581,7 @@ export class Designer {
 	}
 
 	createThumbmailProgram() {
-		var prog = buildShaderProgram(
+		const prog = buildShaderProgram(
 			this.gl,
 			`precision mediump float;
 
@@ -504,7 +610,7 @@ export class Designer {
 	}
 
 	getNodeByName(exportName: string): DesignerNode {
-		for (let node of this.nodes) {
+		for (const node of this.nodes) {
 			if (node.exportName == exportName) return node;
 		}
 
@@ -512,11 +618,11 @@ export class Designer {
 	}
 
 	getNodeInputs(node: DesignerNode): NodeInput[] {
-		var inputs: NodeInput[] = new Array();
+		const inputs: NodeInput[] = [];
 
-		for (let con of this.conns) {
+		for (const con of this.conns) {
 			if (con.rightNode == node) {
-				let input = new NodeInput();
+				const input = new NodeInput();
 				input.name = con.rightNodeInput;
 				input.node = con.leftNode;
 				inputs.push(input);
@@ -533,7 +639,7 @@ export class Designer {
 	): DesignerVariable {
 		//todo: throw exception if variable already exists?
 
-		var variable = new DesignerVariable();
+		const variable = new DesignerVariable();
 		variable.type = varType;
 		variable.id = Guid.newGuid();
 
@@ -551,11 +657,7 @@ export class Designer {
 				variable.property = new EnumProperty(name, displayName, []);
 				break;
 			case DesignerVariableType.Color:
-				variable.property = new ColorProperty(
-					name,
-					displayName,
-					new Color()
-				);
+				variable.property = new ColorProperty(name, displayName, new Color());
 				break;
 		}
 
@@ -569,10 +671,10 @@ export class Designer {
 		node: DesignerNode,
 		nodePropName: string
 	) {
-		var variable = this.findVariable(varName);
+		const variable = this.findVariable(varName);
 		if (variable == null) return; //todo: throw exception?
 
-		var map = new DesignerNodePropertyMap();
+		const map = new DesignerNodePropertyMap();
 		map.node = node;
 		map.propertyName = nodePropName;
 
@@ -582,13 +684,13 @@ export class Designer {
 	//todo: remove property map
 
 	public setVariable(name: string, value: any) {
-		var variable = this.findVariable(name);
+		const variable = this.findVariable(name);
 		if (variable) {
 			//todo: throw exception for invalid types being set
 			variable.property.setValue(value);
 
 			//update each node's variables
-			for (let nodeMap of variable.nodes) {
+			for (const nodeMap of variable.nodes) {
 				//if (nodeMap.node.hasProperty(nodeMap.propertyName))// just incase
 				nodeMap.node.setProperty(nodeMap.propertyName, value);
 			}
@@ -598,13 +700,13 @@ export class Designer {
 	}
 
 	public findVariable(name: string) {
-		for (let variable of this.variables)
+		for (const variable of this.variables)
 			if (variable.property.name == name) return variable;
 		return null;
 	}
 
 	public hasVariable(name: string): boolean {
-		for (let variable of this.variables)
+		for (const variable of this.variables)
 			if (variable.property.name == name) return true;
 		return false;
 	}
@@ -614,16 +716,16 @@ export class Designer {
 	}
 
 	public save(): any {
-		var nodes = new Array();
-		for (let node of this.nodes) {
-			var n = {};
+		const nodes = [];
+		for (const node of this.nodes) {
+			const n = {};
 			n["id"] = node.id;
 			n["typeName"] = node.typeName;
 			n["exportName"] = node.exportName;
 			//n["inputs"] = node.inputs;// not needed imo
 
-			var props = {};
-			for (let prop of node.properties) {
+			const props = {};
+			for (const prop of node.properties) {
 				props[prop.name] = prop.getValue();
 			}
 			n["properties"] = props;
@@ -631,9 +733,9 @@ export class Designer {
 			nodes.push(n);
 		}
 
-		var connections = new Array();
-		for (let con of this.conns) {
-			var c = {};
+		const connections = [];
+		for (const con of this.conns) {
+			const c = {};
 			c["id"] = con.id;
 			c["leftNodeId"] = con.leftNode.id;
 			c["leftNodeOutput"] = con.leftNodeOutput;
@@ -643,18 +745,18 @@ export class Designer {
 			connections.push(c);
 		}
 
-		var variables = new Array();
-		for (let dvar of this.variables) {
-			var v = {};
+		const variables = [];
+		for (const dvar of this.variables) {
+			const v = {};
 			v["id"] = dvar.id;
 			v["type"] = dvar.type;
 			v["property"] = dvar.property;
 
-			var nodeIds = new Array();
-			for (let n of dvar.nodes) {
+			const nodeIds = [];
+			for (const n of dvar.nodes) {
 				nodeIds.push({
 					nodeId: n.node.id,
-					name: n.propertyName,
+					name: n.propertyName
 				});
 			}
 			v["linkedProperties"] = nodeIds;
@@ -662,7 +764,7 @@ export class Designer {
 			console.log(v);
 		}
 
-		var data = {};
+		const data = {};
 		data["nodes"] = nodes;
 		data["connections"] = connections;
 		data["variables"] = variables;
@@ -671,10 +773,10 @@ export class Designer {
 
 	static load(data: any, lib: DesignerLibrary): Designer {
 		console.log(data);
-		var d = new Designer();
-		var nodes = data["nodes"];
-		for (let node of nodes) {
-			var n = lib.create(node["typeName"]);
+		const d = new Designer();
+		const nodes = data["nodes"];
+		for (const node of nodes) {
+			const n = lib.create(node["typeName"]);
 			n.exportName = node["exportName"];
 			n.id = node["id"];
 
@@ -683,17 +785,17 @@ export class Designer {
 			d.addNode(n);
 
 			// add properties
-			var properties = node["properties"];
-			for (var prop in properties) {
+			const properties = node["properties"];
+			for (const prop in properties) {
 				n.setProperty(prop, properties[prop]);
 			}
 		}
 
-		var connections = data["connections"];
-		for (let con of connections) {
+		const connections = data["connections"];
+		for (const con of connections) {
 			//var c = d.addConnection()
-			var left = d.getNodeById(con.leftNodeId);
-			var right = d.getNodeById(con.rightNodeId);
+			const left = d.getNodeById(con.leftNodeId);
+			const right = d.getNodeById(con.rightNodeId);
 
 			// todo: support left index
 			d.addConnection(left, right, con.rightNodeInput);
@@ -718,11 +820,11 @@ export class Designer {
         }
         */
 		if (data.variables) {
-			var variables = <DesignerVariable[]>data.variables;
-			for (let v of variables) {
+			const variables = <DesignerVariable[]>data.variables;
+			for (const v of variables) {
 				//this.addVariable(v.name, v.displayName, )
 
-				var dvar = d.addVariable(
+				const dvar = d.addVariable(
 					v.property.name,
 					v.property.displayName,
 					v.type
@@ -731,39 +833,39 @@ export class Designer {
 				// copy values over to the property
 				switch (dvar.type) {
 					case DesignerVariableType.Float:
-						(<FloatProperty>dvar.property).copyValuesFrom(<
-							FloatProperty
-						>v.property);
+						(<FloatProperty>dvar.property).copyValuesFrom(
+							<FloatProperty>v.property
+						);
 						break;
 
 					case DesignerVariableType.Int:
-						(<IntProperty>dvar.property).copyValuesFrom(<
-							IntProperty
-						>v.property);
+						(<IntProperty>dvar.property).copyValuesFrom(
+							<IntProperty>v.property
+						);
 						break;
 
 					case DesignerVariableType.Bool:
-						(<BoolProperty>dvar.property).copyValuesFrom(<
-							BoolProperty
-						>v.property);
+						(<BoolProperty>dvar.property).copyValuesFrom(
+							<BoolProperty>v.property
+						);
 						break;
 
 					case DesignerVariableType.Enum:
-						(<EnumProperty>dvar.property).copyValuesFrom(<
-							EnumProperty
-						>v.property);
+						(<EnumProperty>dvar.property).copyValuesFrom(
+							<EnumProperty>v.property
+						);
 						break;
 
 					case DesignerVariableType.Color:
-						(<ColorProperty>dvar.property).copyValuesFrom(<
-							ColorProperty
-						>v.property);
+						(<ColorProperty>dvar.property).copyValuesFrom(
+							<ColorProperty>v.property
+						);
 						break;
 				}
 
 				// link properties
-				for (let lp of (<any>v).linkedProperties) {
-					let node = d.getNodeById(lp.nodeId);
+				for (const lp of (<any>v).linkedProperties) {
+					const node = d.getNodeById(lp.nodeId);
 					d.mapNodePropertyToVariable(v.property.name, node, lp.name);
 				}
 			}

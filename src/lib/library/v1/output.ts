@@ -1,14 +1,14 @@
-import { DesignerNode } from "../../designer/designernode";
+import { GpuDesignerNode } from "../../designer/gpudesignernode";
 import { Color } from "@/lib/designer/color";
 
-export class OutputNode extends DesignerNode {
-  public init() {
-    this.title = "Output";
+export class OutputNode extends GpuDesignerNode {
+	public init() {
+		this.title = "Output";
 
-    this.addInput("image");
-    this.addColorProperty("color", "Default Color", new Color());
+		this.addInput("image");
+		this.addColorProperty("color", "Default Color", new Color());
 
-    var source = `
+		const source = `
         vec4 process(vec2 uv)
         {
             vec4 col;
@@ -25,6 +25,6 @@ export class OutputNode extends DesignerNode {
         }
         `;
 
-    this.buildShader(source);
-  }
+		this.buildShader(source);
+	}
 }

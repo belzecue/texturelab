@@ -1,13 +1,13 @@
-import { DesignerNode } from "../../designer/designernode";
+import { GpuDesignerNode } from "../../designer/gpudesignernode";
 
 // https://thebookofshaders.com/11/
-export class SimplexNoiseNode extends DesignerNode {
-  public init() {
-    this.title = "Simplex Noise";
+export class SimplexNoiseNode extends GpuDesignerNode {
+	public init() {
+		this.title = "Simplex Noise";
 
-    this.addFloatProperty("scale", "Scale", 100, 1, 1000, 0.01);
+		this.addFloatProperty("scale", "Scale", 100, 1, 1000, 0.01);
 
-    var source = `
+		const source = `
         float random (in vec2 st) {
             return fract(sin(dot(st.xy,
                                  vec2(12.9898,78.233)))
@@ -66,6 +66,6 @@ export class SimplexNoiseNode extends DesignerNode {
         }
         `;
 
-    this.buildShader(source);
-  }
+		this.buildShader(source);
+	}
 }

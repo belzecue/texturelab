@@ -1,38 +1,38 @@
-import { DesignerNode } from "../../designer/designernode";
+import { GpuDesignerNode } from "../../designer/gpudesignernode";
 import { Color } from "@/lib/designer/color";
 
-export class ColorizeNode extends DesignerNode {
-  public init() {
-    this.title = "Colorize";
+export class ColorizeNode extends GpuDesignerNode {
+	public init() {
+		this.title = "Colorize";
 
-    this.addInput("image");
+		this.addInput("image");
 
-    this.addColorProperty("color", "Color", new Color());
+		this.addColorProperty("color", "Color", new Color());
 
-    var source = `
+		const source = `
         vec4 process(vec2 uv)
         {
             return texture(image,uv) * prop_color;
         }
         `;
 
-    this.buildShader(source);
-  }
+		this.buildShader(source);
+	}
 }
 
-export class ColorNode extends DesignerNode {
-  public init() {
-    this.title = "Color";
+export class ColorNode extends GpuDesignerNode {
+	public init() {
+		this.title = "Color";
 
-    this.addColorProperty("color", "Color", new Color());
+		this.addColorProperty("color", "Color", new Color());
 
-    var source = `
+		const source = `
         vec4 process(vec2 uv)
         {
             return prop_color;
         }
         `;
 
-    this.buildShader(source);
-  }
+		this.buildShader(source);
+	}
 }

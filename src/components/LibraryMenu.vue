@@ -1,9 +1,5 @@
 <template>
-	<div
-		class="modal"
-		:class="show ? 'show-modal' : ''"
-		@click.self="hideModal"
-	>
+	<div class="modal" :class="show ? 'show-modal' : ''" @click.self="hideModal">
 		<div class="menu" ref="menu" @keydown="menuKeyDown">
 			<input
 				class="search-input"
@@ -42,7 +38,7 @@
 import { Component, Prop, Vue, Watch } from "vue-property-decorator";
 import { DesignerLibrary } from "@/lib/designer/library";
 import { LibraryItem, LibraryItemType } from "@/views/Library.vue";
-import { Editor } from "@/lib/editortest";
+import { Editor } from "@/lib/editor";
 import fs from "fs";
 import path from "path";
 import { AddItemsAction } from "@/lib/actions/additemsaction";
@@ -70,7 +66,7 @@ export default class LibraryMenu extends Vue {
 	mounted() {}
 
 	get items() {
-		let items = Object.values(this.library.nodes).map((n) => {
+		let items = Object.values(this.library.nodes).map(n => {
 			let item = new LibraryItem(LibraryItemType.Node);
 			item.name = n.name;
 			item.displayName = n.displayName;
@@ -78,9 +74,7 @@ export default class LibraryMenu extends Vue {
 			return item;
 		});
 
-		items.push(
-			new LibraryItem(LibraryItemType.Comment, "comment", "Comment")
-		);
+		items.push(new LibraryItem(LibraryItemType.Comment, "comment", "Comment"));
 		items.push(new LibraryItem(LibraryItemType.Frame, "frame", "Frame"));
 		// items.push(
 		// 	new LibraryItem(
@@ -110,7 +104,7 @@ export default class LibraryMenu extends Vue {
 		this.show = true;
 		this.selectedItem = null;
 
-		let el = <HTMLElement>this.$refs.menu;
+		let el = this.$refs.menu as HTMLElement;
 		console.log(x + " " + y);
 
 		el.style.left = x + "px";
@@ -120,9 +114,9 @@ export default class LibraryMenu extends Vue {
 		this.mouseY = y;
 
 		//
-		window.setTimeout((x) => {
-			console.log(<HTMLInputElement>this.$refs["search"]);
-			(<HTMLInputElement>this.$refs["search"]).focus();
+		window.setTimeout(x => {
+			console.log(this.$refs["search"] as HTMLInputElement);
+			(this.$refs["search"] as HTMLInputElement).focus();
 		}, 0);
 	}
 
@@ -232,11 +226,7 @@ export default class LibraryMenu extends Vue {
 		if (type == LibraryItemType.Node) {
 			var dnode = this.library.create(nodeName);
 			var canvas = this.editor.canvas;
-			var n = this.editor.addNode(
-				dnode,
-				canvas.width / 2,
-				canvas.height / 2
-			);
+			var n = this.editor.addNode(dnode, canvas.width / 2, canvas.height / 2);
 
 			n.setCenter(scenePos.x, scenePos.y);
 
@@ -313,8 +303,7 @@ export default class LibraryMenu extends Vue {
 		//return `./assets/nodes/${node}.png`;
 		if (process.env.NODE_ENV == "production")
 			return (
-				"file://" +
-				path.join(process.env.BASE_URL, `assets/nodes/${node}.png`)
+				"file://" + path.join(process.env.BASE_URL, `assets/nodes/${node}.png`)
 			);
 		return path.join(process.env.BASE_URL, `assets/nodes/${node}.png`);
 	}
@@ -332,7 +321,7 @@ export default class LibraryMenu extends Vue {
 	width: 100%; /* Full width */
 	height: 100%; /* Full height */
 	overflow: hidden; /* Enable scroll if needed */
-	background-color: rgba(0, 0, 0, 0.4); /* Black w/ opacity */
+	background-color: rgba(0, 0, 0, 0.2); /* Black w/ opacity */
 }
 
 .show-modal {
@@ -345,9 +334,11 @@ export default class LibraryMenu extends Vue {
 	background-color: #fefefe;
 	/* margin: 15% auto; */
 	/* padding: 20px; */
-	border: 1px solid #888;
+	/* border: 1px solid #888; */
 	width: 350px; /* Could be more or less, depending on screen size */
 	background: rgb(44, 44, 44);
+	box-shadow: rgba(0, 0, 0, 0.9) 0px 1px 3px;
+	border-radius: 2px;
 }
 
 .card-list {
@@ -358,7 +349,8 @@ export default class LibraryMenu extends Vue {
 .search-input {
 	background: transparent;
 	color: white;
-	border: solid rgb(77, 156, 187) 1px;
+	/* border: solid rgb(77, 156, 187) 1px; */
+	border: none;
 
 	float: none;
 	display: block;
@@ -381,10 +373,11 @@ export default class LibraryMenu extends Vue {
 }
 
 .libcard {
-	padding: 5px;
+	padding: 0.5em;
 	color: white;
 	border: solid transparent 1px;
 	display: table; /* for center-aligning text */
+	cursor: pointer;
 }
 
 .libcard:hover {

@@ -1,10 +1,10 @@
-import { DesignerNode } from "../../designer/designernode";
+import { GpuDesignerNode } from "../../designer/gpudesignernode";
 
-export class Perlin3DNode extends DesignerNode {
-  public init() {
-    this.title = "Perlin 3D";
+export class Perlin3DNode extends GpuDesignerNode {
+	public init() {
+		this.title = "Perlin 3D";
 
-    var source = `
+		const source = `
         vec3 mod289(vec3 x)
 {
   return x - floor(x * (1.0 / 289.0)) * 289.0;
@@ -177,6 +177,6 @@ vec4 process(vec2 uv)
 }
         `;
 
-    this.buildShader(source);
-  }
+		this.buildShader(source);
+	}
 }

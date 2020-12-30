@@ -1,28 +1,28 @@
-import { DesignerNode } from "../../designer/designernode";
+import { GpuDesignerNode } from "../../designer/gpudesignernode";
 
-export class BlendNode extends DesignerNode {
-  public init() {
-    this.title = "Blend";
+export class BlendNode extends GpuDesignerNode {
+	public init() {
+		this.title = "Blend";
 
-    this.addInput("colorA"); // foreground
-    this.addInput("colorB"); // background
-    this.addInput("opacity");
+		this.addInput("colorA"); // foreground
+		this.addInput("colorB"); // background
+		this.addInput("opacity");
 
-    this.addEnumProperty("type", "Type", [
-      "Multiply",
-      "Add",
-      "Subtract",
-      "Divide",
-      //   "Add Sub",
-      "Max",
-      "Min",
-      "Switch",
-      "Overlay",
-      "Screen"
-    ]);
-    this.addFloatProperty("opacity", "Opacity", 1.0, 0.0, 1.0, 0.01);
+		this.addEnumProperty("type", "Type", [
+			"Multiply",
+			"Add",
+			"Subtract",
+			"Divide",
+			//   "Add Sub",
+			"Max",
+			"Min",
+			"Switch",
+			"Overlay",
+			"Screen"
+		]);
+		this.addFloatProperty("opacity", "Opacity", 1.0, 0.0, 1.0, 0.01);
 
-    var source = `
+		const source = `
 
         float screen(float fg, float bg) {
             float res = (1.0 - fg) * (1.0 - bg);
@@ -79,6 +79,6 @@ export class BlendNode extends DesignerNode {
         }
         `;
 
-    this.buildShader(source);
-  }
+		this.buildShader(source);
+	}
 }

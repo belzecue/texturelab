@@ -1,15 +1,15 @@
-import { DesignerNode } from "../../designer/designernode";
+import { GpuDesignerNode } from "../../designer/gpudesignernode";
 
 // https://github.com/evanw/glfx.js/blob/master/src/filters/adjust/brightnesscontrast.js
-export class BrightnessContrastNode extends DesignerNode {
-  public init() {
-    this.title = "Brightness Contrast";
+export class BrightnessContrastNode extends GpuDesignerNode {
+	public init() {
+		this.title = "Brightness Contrast";
 
-    this.addInput("image");
+		this.addInput("image");
 
-    this.addFloatProperty("contrast", "Contrast", 0.0, -1, 1, 0.1);
-    this.addFloatProperty("brightness", "Brightness", 0.0, -1, 1, 0.1);
-    var source = `
+		this.addFloatProperty("contrast", "Contrast", 0.0, -1, 1, 0.1);
+		this.addFloatProperty("brightness", "Brightness", 0.0, -1, 1, 0.1);
+		const source = `
         vec4 process(vec2 uv)
         {
             vec4 col = texture(image, uv);
@@ -24,6 +24,6 @@ export class BrightnessContrastNode extends DesignerNode {
         }
         `;
 
-    this.buildShader(source);
-  }
+		this.buildShader(source);
+	}
 }

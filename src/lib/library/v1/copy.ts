@@ -1,13 +1,13 @@
-import { DesignerNode } from "../../designer/designernode";
+import { GpuDesignerNode } from "../../designer/gpudesignernode";
 
-export class CopyNode extends DesignerNode {
-  public init() {
-    this.title = "Copy";
+export class CopyNode extends GpuDesignerNode {
+	public init() {
+		this.title = "Copy";
 
-    this.addInput("image");
-    this.addStringProperty("name", "Name");
+		this.addInput("image");
+		this.addStringProperty("name", "Name");
 
-    var source = `
+		const source = `
         vec4 process(vec2 uv)
         {
             vec4 col = texture(image, uv);
@@ -15,6 +15,6 @@ export class CopyNode extends DesignerNode {
         }
         `;
 
-    this.buildShader(source);
-  }
+		this.buildShader(source);
+	}
 }

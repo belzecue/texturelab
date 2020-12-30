@@ -85,10 +85,11 @@ export default class BoolPropertyView extends Vue {
 .bool {
 	margin-top: 0.4em;
 	width: 100%;
-	border: solid white 1px;
+	border: none;
 	border-radius: 2px;
 	color: white;
 	background: #222;
 	padding: 4px;
+	outline: none;
 }
 </style>
